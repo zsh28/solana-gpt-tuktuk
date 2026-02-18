@@ -2,19 +2,23 @@
   "license": "ISC",
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
+    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    "cron:status": "tuktuk --url https://api.devnet.solana.com cron get --cron-pubkey 3p1qTAUEqSNKwyWMiwRRF4umiNAt4tC22fGPkAFZwG6j && tuktuk --url https://api.devnet.solana.com cron-transaction list --cron-pubkey 3p1qTAUEqSNKwyWMiwRRF4umiNAt4tC22fGPkAFZwG6j && tuktuk --url https://api.devnet.solana.com task list --task-queue-pubkey iWJSTmKR47zVuDdswSALrWDBWiawq9b4vwoRmXF24HG --limit 20",
+    "cron:watch": "tuktuk --url https://api.devnet.solana.com task watch --task-queue-pubkey iWJSTmKR47zVuDdswSALrWDBWiawq9b4vwoRmXF24HG --description \"queue solana-gpt-oracle-cron\""
   },
   "dependencies": {
-    "@coral-xyz/anchor": "^0.31.0",
+    "@coral-xyz/anchor": "^0.32.1",
     "@helium/cron-sdk": "^0.0.10",
     "@helium/spl-utils": "^0.11.7",
     "@helium/tuktuk-sdk": "^0.0.10",
-    "axios": "^1.13.2"
+    "axios": "^1.13.2",
+    "yargs": "^18.0.0"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",
     "@types/chai": "^4.3.0",
     "@types/mocha": "^9.0.0",
+    "@types/yargs": "^17.0.35",
     "chai": "^4.3.4",
     "mocha": "^9.0.3",
     "prettier": "^2.6.2",
@@ -22,7 +26,7 @@
     "typescript": "^5.7.3"
   },
   "resolutions": {
-    "@coral-xyz/anchor": "^0.31.0"
+    "@coral-xyz/anchor": "^0.32.1"
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }

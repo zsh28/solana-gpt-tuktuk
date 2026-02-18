@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-tuktuk_counter = "6wpZxCkv6bZwosC1WHqqhm2sDZfV3oA7fSMU78vkipaR"
+solana_gpt_oracle = "6wpZxCkv6bZwosC1WHqqhm2sDZfV3oA7fSMU78vkipaR"
 
 [registry]
 url = "https://api.apr.dev"
@@ -17,4 +17,4 @@ wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 \"tests/**/*.ts\""
-cron = "yarn run ts-node cron/cron.ts --cronName tuktuk-counter-cron --queueName tuktuk-counter --walletPath ~/.config/solana/id.json --rpcUrl https://api.devnet.solana.com"
+cron = "yarn run ts-node cron/cron.ts --cronName solana-gpt-oracle-cron --taskQueue iWJSTmKR47zVuDdswSALrWDBWiawq9b4vwoRmXF24HG"

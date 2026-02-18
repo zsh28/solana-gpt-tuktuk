@@ -1,26 +1,51 @@
 use anchor_lang::prelude::*;
 
-use crate::state::Counter;
+use crate::state::OracleState;
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub payer: Signer<'info>,
     #[account(
         init,
-        payer = user,
-        seeds = [b"counter"],
+        payer = payer,
+        seeds = [b"oracle_state"],
         bump,
-        space = Counter::INIT_SPACE,
+        space = 8 + OracleState::INIT_SPACE,
     )]
-    pub counter: Account<'info, Counter>,
+    pub oracle_state: Account<'info, OracleState>,
+    #[account(
+        init,
+        payer = payer,
+        seeds = [b"treasury"],
+        bump,
+        space = 0,
+        owner = system_program::ID
+    )]
+    /// CHECK: program treasury PDA used as system-owned CPI payer
+    pub treasury: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
 impl<'info> Initialize<'info> {
-    pub fn initialize(&mut self, bumps: &InitializeBumps) -> Result<()> {
-        self.counter.count = 0;
-        self.counter.bump = bumps.counter;
+    pub fn initialize(
+        &mut self,
+        default_prompt: String,
+        task_queue_authority: Pubkey,
+        bumps: &InitializeBumps,
+    ) -> Result<()> {
+        require!(
+            default_prompt.as_bytes().len() <= 280,
+            crate::SolanaGptOracleError::PromptTooLong
+        );
+
+        self.oracle_state.bump = bumps.oracle_state;
+        self.oracle_state.treasury_bump = bumps.treasury;
+        self.oracle_state.requests = 0;
+        self.oracle_state.llm_context = Pubkey::default();
+        self.oracle_state.task_queue_authority = task_queue_authority;
+        self.oracle_state.default_prompt = default_prompt;
+        self.oracle_state.last_response = String::new();
 
         Ok(())
     }

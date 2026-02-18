@@ -1,79 +1,99 @@
-use std::str::FromStr;
-
-use anchor_lang::{prelude::*, InstructionData};
 use anchor_lang::solana_program::instruction::Instruction;
+use anchor_lang::{prelude::*, InstructionData};
 use tuktuk_program::{
-    TransactionSourceV0, 
-    compile_transaction, 
+    compile_transaction,
     tuktuk::{
-        cpi::{
-            accounts::{
-                QueueTaskV0, 
-                InitializeTaskQueueV0
-            },
-            queue_task_v0, 
-            initialize_task_queue_v0
-        }, 
-        program::Tuktuk, 
-        types::TriggerV0
-    }, types::QueueTaskArgsV0
+        cpi::{accounts::QueueTaskV0, queue_task_v0},
+        program::Tuktuk,
+        types::TriggerV0,
+    },
+    types::{QueueTaskArgsV0, TransactionSourceV0},
 };
 
-use crate::state::Counter;
+use crate::state::OracleState;
 
 #[derive(Accounts)]
 pub struct Schedule<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
     #[account(
         mut,
-        address = Pubkey::from_str("AHYic562KhgtAEkb1rSesqS87dFYRcfXb4WwWus3Zc9C").unwrap()
+        seeds = [b"oracle_state"],
+        bump = oracle_state.bump,
     )]
-    pub user: Signer<'info>,
-    /// CHECK: This is safe because we don't read or write from this account
+    pub oracle_state: Account<'info, OracleState>,
+    #[account(
+        seeds = [b"treasury"],
+        bump = oracle_state.treasury_bump,
+    )]
+    /// CHECK: system-owned oracle payer PDA
+    pub treasury: UncheckedAccount<'info>,
+    #[account(address = oracle_state.llm_context)]
+    pub llm_context: Account<'info, solana_gpt_oracle::ContextAccount>,
     #[account(
         mut,
-        seeds = [b"counter"],
+        seeds = [
+            solana_gpt_oracle::Interaction::seed(),
+            treasury.key().as_ref(),
+            llm_context.key().as_ref(),
+        ],
         bump,
+        seeds::program = oracle_program.key(),
     )]
-    pub counter: Account<'info, Counter>,
+    /// CHECK: created by oracle program during queued request
+    pub interaction: UncheckedAccount<'info>,
     #[account(mut)]
-    /// CHECK: Don't need to parse this account, just using it in CPI
+    /// CHECK: used only in TukTuk CPI
     pub task_queue: UncheckedAccount<'info>,
-    /// CHECK: Don't need to parse this account, just using it in CPI
+    #[account(address = oracle_state.task_queue_authority)]
+    /// CHECK: validated against configured queue authority and used in TukTuk CPI
     pub task_queue_authority: UncheckedAccount<'info>,
-    /// CHECK: Initialized in CPI
     #[account(mut)]
+    /// CHECK: initialized in TukTuk CPI
     pub task: UncheckedAccount<'info>,
-    /// CHECK: Via seeds
     #[account(
-        mut,
         seeds = [b"queue_authority"],
         bump
     )]
-    pub queue_authority: AccountInfo<'info>,
+    /// CHECK: PDA signer for queue_task_v0 CPI
+    pub queue_authority: UncheckedAccount<'info>,
+    pub oracle_program: Program<'info, solana_gpt_oracle::program::SolanaGptOracle>,
     pub system_program: Program<'info, System>,
     pub tuktuk_program: Program<'info, Tuktuk>,
 }
 
 impl<'info> Schedule<'info> {
     pub fn schedule(&mut self, task_id: u16, bumps: ScheduleBumps) -> Result<()> {
+        require!(
+            self.oracle_state.llm_context != Pubkey::default(),
+            crate::SolanaGptOracleError::ContextNotInitialized
+        );
+
         let (compiled_tx, _) = compile_transaction(
             vec![Instruction {
                 program_id: crate::ID,
-                accounts: crate::__cpi_client_accounts_increment::Increment {
-                    counter: self.counter.to_account_info(),
+                accounts: crate::__cpi_client_accounts_request_gpt::RequestGpt {
+                    oracle_state: self.oracle_state.to_account_info(),
+                    treasury: self.treasury.to_account_info(),
+                    interaction: self.interaction.to_account_info(),
+                    llm_context: self.llm_context.to_account_info(),
+                    task_queue_authority: self.task_queue_authority.to_account_info(),
+                    system_program: self.system_program.to_account_info(),
+                    oracle_program: self.oracle_program.to_account_info(),
                 }
                 .to_account_metas(None)
                 .to_vec(),
-                data: crate::instruction::Increment {}.data(),
+                data: crate::instruction::RequestGpt {}.data(),
             }],
-        vec![],
-        ).unwrap();
+            vec![],
+        )
+        .map_err(|_| error!(crate::SolanaGptOracleError::TaskCompilationFailed))?;
 
         queue_task_v0(
             CpiContext::new_with_signer(
                 self.tuktuk_program.to_account_info(),
                 QueueTaskV0 {
-                    payer: self.user.to_account_info(),
+                    payer: self.payer.to_account_info(),
                     queue_authority: self.queue_authority.to_account_info(),
                     task_queue: self.task_queue.to_account_info(),
                     task_queue_authority: self.task_queue_authority.to_account_info(),
@@ -88,10 +108,10 @@ impl<'info> Schedule<'info> {
                 crank_reward: Some(1000001),
                 free_tasks: 1,
                 id: task_id,
-                description: "test".to_string(),
+                description: "solana-gpt-oracle request".to_string(),
             },
         )?;
-        
-    Ok(())
+
+        Ok(())
     }
 }
